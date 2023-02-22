@@ -21,10 +21,10 @@ import removeEffectSaga from './turn-actions/remove-effect'
 import followUpSaga from './turn-actions/follow-up'
 import registerCards from '../cards/card-plugins'
 import chatSaga from './chat'
-import root from '../classes/root'
+import root from '../models/root-model'
 
 /**
- * @typedef {import("../classes/game").Game} Game
+ * @typedef {import("models/game-model").Game} Game
  */
 
 // TURN ACTIONS:
@@ -280,14 +280,12 @@ function* sendGameState(game, derivedState) {
 	const {currentPlayer, availableActions, opponentAvailableActions} =
 		derivedState
 	// TODO - omit state clients shouldn't see (e.g. other players hand, either players pile etc.)
-	game.getPlayerValues().forEach((player) => {
+	game.getPlayers().forEach((player) => {
 		player.socket.emit('GAME_STATE', {
 			type: 'GAME_STATE',
 			payload: {
 				gameState: game.state,
-				opponentId: Object.keys(game.players).find(
-					(id) => id !== player.playerId
-				),
+				opponentId: game.getPlayerIds().find((id) => id !== player.playerId),
 				availableActions:
 					player.playerId === currentPlayer.id
 						? availableActions
@@ -464,6 +462,7 @@ function* sendGameStateOnReconnect(game) {
  */
 function* gameSaga(game) {
 	try {
+		if (!game.state) throw new Error('Trying to starting uninitialized game')
 		registerCards(game)
 
 		yield fork(sendGameStateOnReconnect, game)
@@ -479,7 +478,7 @@ function* gameSaga(game) {
 			if (result === 'GAME_END') break
 		}
 
-		game.getPlayerValues().forEach((player) => {
+		game.getPlayers().forEach((player) => {
 			player.socket.emit('GAME_END', {
 				type: 'GAME_END',
 				payload: {
